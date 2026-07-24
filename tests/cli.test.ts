@@ -66,6 +66,27 @@ beforeAll(() => {
       '2088', '4', '사과', '탄저병', '만코제브 수화제',
       '다이센엠-45', '(주)경농', 'mancozeb WP75 %', '살균제'
     );
+    INSERT INTO products (
+      pesti_code, pesti_kor_name, brand_name, comp_name, eng_name,
+      ingredient_name, cmpa_itm_nm, indict_symbl, use_name,
+      apply_first_reg_date, reg_cpnt_qnty, toxic_gubun, toxic_name, fish_toxic_gubun
+    ) VALUES (
+      '3100', '디페노코나졸 액상수화제', '푸름이', '(주)팜한농', 'difenoconazole SC10 %',
+      'difenoconazole', '제조', '사1', '살균제', '20100101', '10', 'Ⅳ', '저독성', 'Ⅲ급'
+    );
+    INSERT INTO usage_rules (
+      pesti_code, disease_use_seq, crop_cd, pest_id, pesti_use,
+      dilut_unit, use_suittime, use_num, wafindex
+    ) VALUES (
+      '3100', '1', '4100', 1, '발병초 경엽처리', '2000배 -', '수확 7일 전까지', '2회 이내', '1'
+    );
+    INSERT INTO fts_usage (
+      pesti_code, disease_use_seq, crop_name, pest_name, pesti_kor_name,
+      brand_name, comp_name, eng_name, use_name
+    ) VALUES (
+      '3100', '1', '사과', '탄저병', '디페노코나졸 액상수화제',
+      '푸름이', '(주)팜한농', 'difenoconazole SC10 %', '살균제'
+    );
   `);
   db.close();
 });
@@ -101,6 +122,30 @@ describe("runCli", () => {
     expect(result.stderr).toBe("");
   });
 
+  test("rotate recommends a different mode-of-action group than the one used", async () => {
+    const result = await invokeCli(["rotate", "사과 탄저병", "--used", "만코제브", "--json"]);
+    const data = JSON.parse(result.stdout) as {
+      usedGroups: string[];
+      recommended: Array<{ indict_symbl: string }>;
+      avoid: Array<{ indict_symbl: string }>;
+    };
+
+    expect(result.code).toBe(0);
+    // 성분명 만코제브는 계열 '카' 하나로만 해석되어야 한다 (복합제로 과잉 확장 금지)
+    expect(data.usedGroups).toEqual(["카"]);
+    expect(data.recommended.map((r) => r.indict_symbl)).toContain("사1");
+    expect(data.recommended.every((r) => r.indict_symbl !== "카")).toBe(true);
+    expect(data.avoid.map((r) => r.indict_symbl)).toContain("카");
+  });
+
+  test("rotate errors when the used agent cannot be resolved", async () => {
+    const result = await invokeCli(["rotate", "사과 탄저병", "--used", "존재하지않는약"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("작용기작을 확인할 수 없습니다");
+  });
+
   test("product finds partial brand matches and revoked-only products", async () => {
     const product = await invokeCli(["product", "다이센"]);
     const revoked = await invokeCli(["product", "용수표"]);
@@ -116,8 +161,8 @@ describe("runCli", () => {
     const result = await invokeCli(["stats"]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("products\t1");
-    expect(result.stdout).toContain("usage_rules\t1");
+    expect(result.stdout).toContain("products\t2");
+    expect(result.stdout).toContain("usage_rules\t2");
     expect(result.stdout).toContain("kb.sqlite mtime\t");
   });
 

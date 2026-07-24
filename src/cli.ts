@@ -86,6 +86,7 @@ type ProductView = {
 type ParsedCommand =
   | { command: "query"; search: string; json: boolean; limit: number }
   | { command: "product"; search: string }
+  | { command: "rotate"; search: string; used: string[]; json: boolean }
   | { command: "stats" };
 
 function parseCommand(argv: string[]): ParsedCommand | null {
@@ -118,8 +119,46 @@ function parseCommand(argv: string[]): ParsedCommand | null {
     if (args.length !== 1 || !args[0]!.trim()) return null;
     return { command, search: args[0]!.trim() };
   }
+  if (command === "rotate") {
+    let search = "";
+    let json = false;
+    const used: string[] = [];
+    for (let index = 0; index < args.length; index += 1) {
+      const arg = args[index]!;
+      if (arg === "--json") {
+        json = true;
+        continue;
+      }
+      if (arg === "--used") {
+        const value = args[index + 1];
+        if (!value || value.startsWith("--") || !value.trim()) return null;
+        used.push(value.trim());
+        index += 1;
+        continue;
+      }
+      if (arg.startsWith("--") || search) return null;
+      search = arg.trim();
+    }
+    if (!search || used.length === 0) return null;
+    return { command, search, used, json };
+  }
   if (command === "stats" && args.length === 0) return { command };
   return null;
+}
+
+// 작용기작 코드를 계열 집합으로 분해한다. 복합제 "아5+다3" → {아5, 다3}.
+// 전착제 등 방제와 무관한 비대상 성분은 로테이션 판정에서 제외한다.
+function parseModeOfAction(symbl: string | null): Set<string> {
+  const groups = (symbl ?? "")
+    .split("+")
+    .map((part) => part.trim())
+    .filter((part) => part && part !== "-" && !part.startsWith("비대상"));
+  return new Set(groups);
+}
+
+function disjoint(a: Set<string>, b: Set<string>): boolean {
+  for (const value of a) if (b.has(value)) return false;
+  return true;
 }
 
 function tsvCell(value: string | null): string {
@@ -333,6 +372,133 @@ function productCommand(db: Database, search: string): void {
   );
 }
 
+type RotateCandidate = {
+  pesti_kor_name: string;
+  brand_name: string | null;
+  comp_name: string | null;
+  indict_symbl: string | null;
+  dilut_unit: string | null;
+  use_suittime: string | null;
+  use_num: string | null;
+};
+
+function rotateCommand(
+  db: Database,
+  search: string,
+  used: string[],
+  json: boolean,
+): void {
+  const tokens = search.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) {
+    console.error("작물·병해충 검색어가 필요합니다");
+    return;
+  }
+  const phrase = tokens.map((token) => `"${token.replaceAll('"', '""')}"`).join(" AND ");
+  // 작물×병해충으로 스코프한 등록 약제 (등록취소 제외 — v_usage는 유효 등록만)
+  const rows = db
+    .query(`
+      SELECT DISTINCT
+        v.pesti_kor_name, v.brand_name, v.comp_name, v.indict_symbl,
+        v.dilut_unit, v.use_suittime, v.use_num
+      FROM fts_usage
+      JOIN v_usage v
+        ON v.pesti_code = fts_usage.pesti_code
+       AND v.disease_use_seq = fts_usage.disease_use_seq
+      WHERE fts_usage MATCH ?
+      ORDER BY v.pesti_kor_name, v.brand_name
+    `)
+    .all(phrase) as RotateCandidate[];
+  if (rows.length === 0) {
+    if (json) console.log("[]");
+    else console.error(`해당 작물·병해충에 등록된 약제가 없습니다: ${search}`);
+    return;
+  }
+
+  // 올해 쓴 약제(들)의 작용기작 계열을 스코프 내에서 해석.
+  // --used 값은 약제명(상표/품목 부분일치) 또는 작용기작 코드 자체를 허용.
+  // 성분명(예: 만코제브)은 이를 포함한 복합제까지 매치되므로, 매치된 약제 중
+  // 계열 수가 가장 적은 제형으로 해석해 회피 계열의 과잉 확장을 막는다.
+  const usedGroups = new Set<string>();
+  const unresolved: string[] = [];
+  for (const term of used) {
+    const matched = rows.filter((row) =>
+      `${row.pesti_kor_name} ${row.brand_name ?? ""}`.includes(term),
+    );
+    if (matched.length > 0) {
+      let narrowest: Set<string> | undefined;
+      for (const row of matched) {
+        const groups = parseModeOfAction(row.indict_symbl);
+        if (groups.size > 0 && (!narrowest || groups.size < narrowest.size)) {
+          narrowest = groups;
+        }
+      }
+      if (narrowest) {
+        for (const group of narrowest) usedGroups.add(group);
+        continue;
+      }
+    }
+    // 약제명으로 못 찾으면 작용기작 코드로 간주
+    if (rows.some((row) => parseModeOfAction(row.indict_symbl).has(term))) {
+      usedGroups.add(term);
+      continue;
+    }
+    unresolved.push(term);
+  }
+  if (usedGroups.size === 0) {
+    console.error(
+      `사용 약제의 작용기작을 확인할 수 없습니다 (미해석: ${unresolved.join(", ")}). ` +
+        `해당 작물·병해충에 등록된 약제명 또는 작용기작 코드로 지정하세요.`,
+    );
+    return;
+  }
+
+  const recommended: RotateCandidate[] = [];
+  const avoid: RotateCandidate[] = [];
+  for (const row of rows) {
+    const groups = parseModeOfAction(row.indict_symbl);
+    if (groups.size > 0 && disjoint(groups, usedGroups)) recommended.push(row);
+    else avoid.push(row);
+  }
+
+  if (json) {
+    console.log(
+      JSON.stringify({
+        scope: search,
+        usedGroups: [...usedGroups],
+        unresolved,
+        recommended,
+        avoid,
+      }),
+    );
+    return;
+  }
+
+  const line = (row: RotateCandidate): string =>
+    [
+      row.indict_symbl,
+      row.pesti_kor_name,
+      row.brand_name,
+      row.comp_name,
+      row.dilut_unit,
+      [row.use_suittime, row.use_num].filter(Boolean).join(" / "),
+    ]
+      .map(tsvCell)
+      .join("\t");
+
+  const out: string[] = [];
+  out.push(`# ${search} — 올해 사용 작용기작: ${[...usedGroups].join(", ")}`);
+  if (unresolved.length > 0) out.push(`# 미해석 입력(무시됨): ${unresolved.join(", ")}`);
+  out.push("");
+  out.push(`## 권장 — 다른 작용기작 계열 (${recommended.length}종)`);
+  out.push("작용기작\t품목명\t상표명\t회사\t희석배수\t안전사용기준");
+  out.push(...recommended.map(line));
+  out.push("");
+  out.push(`## 회피 — 같은 계열 포함 (${avoid.length}종)`);
+  out.push("작용기작\t품목명\t상표명\t회사\t희석배수\t안전사용기준");
+  out.push(...avoid.map(line));
+  console.log(out.join("\n"));
+}
+
 function statsCommand(db: Database, dbPath: string): void {
   const tableNames = [
     "products",
@@ -357,7 +523,8 @@ export async function runCli(argv: string[], dbPath?: string): Promise<number> {
   const parsed = parseCommand(argv);
   if (!parsed) {
     console.error(
-      "사용법: kb query <검색어> [--json] [--limit N] | kb product <이름> | kb stats",
+      "사용법: kb query <검색어> [--json] [--limit N] | kb product <이름> | " +
+        "kb rotate <작물 병해충> --used <약제명|작용기작> [--used ...] [--json] | kb stats",
     );
     return 1;
   }
@@ -375,6 +542,8 @@ export async function runCli(argv: string[], dbPath?: string): Promise<number> {
       queryCommand(db, parsed.search, parsed.json, parsed.limit);
     } else if (parsed.command === "product") {
       productCommand(db, parsed.search);
+    } else if (parsed.command === "rotate") {
+      rotateCommand(db, parsed.search, parsed.used, parsed.json);
     } else {
       statsCommand(db, resolvedDbPath);
     }
