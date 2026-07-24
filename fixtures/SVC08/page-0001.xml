@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<service>
+<totalCount>2</totalCount>
+<list>
+<item>
+<prdlstRegistNo>1001-살균-6</prdlstRegistNo>
+<cmpaItmNm>수입</cmpaItmNm>
+<pestiKorName>엑스12485473 액상제</pestiKorName>
+<engName>X12485473</engName>
+<registStndrd>5%</registStndrd>
+<pestiBrandName>용수표</pestiBrandName>
+<compName>(주)농촌진흥청</compName>
+<prdlstAblDe>2021-09-14</prdlstAblDe>
+</item>
+<item>
+<prdlstRegistNo>2044-제초-11</prdlstRegistNo>
+<cmpaItmNm>제조</cmpaItmNm>
+<pestiKorName>파라콰트디클로라이드 액제</pestiKorName>
+<engName>paraquat dichloride</engName>
+<registStndrd>24.5%</registStndrd>
+<pestiBrandName>그라목손</pestiBrandName>
+<compName>신젠타코리아(주)</compName>
+<prdlstAblDe>2012-11-07</prdlstAblDe>
+</item>
+</list>
+</service>

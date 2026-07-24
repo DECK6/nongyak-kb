@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "milestone": "M1",
+  "phase": "P1-implementation",
+  "gate": "done",
+  "status": "complete",
+  "owner_runtime": "claude-code",
+  "acceptance_criteria": [
+    "bun test 전체 통과",
+    "mock E2E: fetch --mock → normalize → export → cli 쿼리 성공",
+    "실데이터: 수집건수==totalCount, SHACL 통과, 샘플 20건 PSIS 대조",
+    "웹앱 검색 시나리오 동작"
+  ],
+  "evidence": [
+    "실수집(2026-07-24): SVC01 144,073/144,073 (중복 0, (pestiCode,diseaseUseSeq) 전역 유일 확인), SVC02 3,961/3,961 누락 0, SVC07 385, SVC08 401",
+    "normalize: products 3,961 / crops 426 / pests 990 / usage_rules 144,073 / FTS 144,073, 충돌 0",
+    "bun test 13/13, tsc clean",
+    "SHACL: 실데이터 ontology.ttl(53MB) pyshacl Conforms exit 0",
+    "팩트체크: 무작위 20건 API 교차 경로 대사 20/20 일치 + PSIS 웹 화면(가스가민) 필드 전항목 일치",
+    "웹앱 headless: 실 DB 91MB 로드, DATABASE READY, 144,073건, 200행 렌더",
+    "버그 수정 3건: schema.sql WAL 제거(sql.js 호환), fetch.ts EINTR 쓰기 재시도, fetch.ts startPoint 오프셋 의미론(매뉴얼 오기 — 페이지가 아니라 아이템 오프셋, 실측 확정), cli.ts 다단어 검색 토큰 AND"
+  ],
+  "blockers": [],
+  "next": [
+    "백로그: MCP 서버화, 식약처 MRL 연계, GitHub Pages 배포(kb.sqlite 91MB 최적화 필요), graphify 시각화, wafindex 의미 규명",
+    "갱신 운영: bun run fetch(재개형) → normalize → export 재실행으로 주기 갱신 가능"
+  ],
+  "updated_at": "2026-07-24T18:45:00+09:00"
+}

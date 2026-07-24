@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="농촌진흥청 PSIS 농약 사용기준 오프라인 검색"
+    >
+    <title>NONGYAK KB — 농약 사용기준 검색</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./theme.css">
+    <script src="./vendor/sql-wasm.js" defer></script>
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">검색 화면으로 건너뛰기</a>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="NONGYAK KB 홈">
+          <span class="brand-mark" aria-hidden="true">N</span>
+          <span class="brand-copy">
+            <strong>NONGYAK KB</strong>
+            <span>PSIS OFFLINE INDEX</span>
+          </span>
+        </a>
+
+        <div class="system-status" aria-live="polite">
+          <span class="status-light" id="status-light" aria-hidden="true"></span>
+          <span>
+            <strong id="database-status">DATABASE INIT</strong>
+            <small id="database-detail">LOCAL SQLITE</small>
+          </span>
+        </div>
+      </header>
+
+      <main id="main-content">
+        <section class="hero panel" aria-labelledby="page-title">
+          <div class="eyebrow">
+            <span>RDA / PSIS</span>
+            <span>USAGE DIRECTORY</span>
+          </div>
+          <div class="hero-grid">
+            <div>
+              <h1 id="page-title">농약 사용기준을<br>한 번에 검색하세요.</h1>
+              <p>
+                작물, 병해충, 품목, 상표, 회사를 하나의 검색창에서 조회합니다.
+                모든 검색은 브라우저 안의 로컬 데이터베이스에서 실행됩니다.
+              </p>
+            </div>
+            <div class="hero-readout" aria-label="시스템 정보">
+              <span>QUERY MODE</span>
+              <strong>LOCAL / LIKE</strong>
+              <span>RESULT LIMIT</span>
+              <strong>200 ROWS</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="search-panel panel" aria-labelledby="search-heading">
+          <div class="section-label">
+            <span aria-hidden="true">01</span>
+            <h2 id="search-heading">통합 검색</h2>
+          </div>
+
+          <form id="search-form" role="search">
+            <label class="search-box" for="search-input">
+              <span class="search-icon" aria-hidden="true"></span>
+              <span class="visually-hidden">검색어</span>
+              <input
+                id="search-input"
+                name="query"
+                type="search"
+                maxlength="120"
+                placeholder="예: 벼, 도열병, 가스가마이신, 동방아그로"
+                autocomplete="off"
+                spellcheck="false"
+                disabled
+              >
+              <kbd>ENTER</kbd>
+            </label>
+
+            <fieldset class="filter-group" id="usage-filters" disabled>
+              <legend>용도 필터</legend>
+              <label class="filter-chip">
+                <input type="radio" name="usage" value="전체" checked>
+                <span>전체</span>
+              </label>
+              <label class="filter-chip">
+                <input type="radio" name="usage" value="살균제">
+                <span>살균제</span>
+              </label>
+              <label class="filter-chip">
+                <input type="radio" name="usage" value="살충제">
+                <span>살충제</span>
+              </label>
+              <label class="filter-chip">
+                <input type="radio" name="usage" value="제초제">
+                <span>제초제</span>
+              </label>
+              <label class="filter-chip">
+                <input type="radio" name="usage" value="기타">
+                <span>기타</span>
+              </label>
+            </fieldset>
+          </form>
+        </section>
+
+        <section class="results-panel panel" aria-labelledby="results-heading">
+          <div class="results-toolbar">
+            <div class="section-label">
+              <span aria-hidden="true">02</span>
+              <h2 id="results-heading">검색 결과</h2>
+            </div>
+            <div class="result-count" aria-live="polite" aria-atomic="true">
+              <strong id="result-count">—</strong>
+              <span id="result-limit-note">데이터 준비 중</span>
+            </div>
+          </div>
+
+          <div id="results-region" aria-busy="true">
+            <div class="state-card" id="loading-state" role="status">
+              <span class="loader" aria-hidden="true"></span>
+              <div>
+                <strong>로컬 데이터베이스 연결 중</strong>
+                <p>SQLite 파일과 검색 엔진을 불러오고 있습니다.</p>
+              </div>
+            </div>
+
+            <div class="state-card" id="empty-state" role="status" hidden>
+              <span class="state-code" aria-hidden="true">00</span>
+              <div>
+                <strong>검색 결과가 없습니다</strong>
+                <p>검색어를 줄이거나 다른 용도 필터를 선택해 보세요.</p>
+              </div>
+            </div>
+
+            <div class="state-card state-card--warning" id="missing-state" role="alert" hidden>
+              <span class="state-code" aria-hidden="true">DB</span>
+              <div>
+                <strong>데이터 없음 — bun run fetch/normalize 안내</strong>
+                <p>
+                  먼저 <code>bun run fetch --mock</code>을 실행한 뒤
+                  <code>bun run normalize</code>로 <code>data/kb.sqlite</code>를 생성하세요.
+                </p>
+              </div>
+            </div>
+
+            <div class="state-card state-card--error" id="error-state" role="alert" hidden>
+              <span class="state-code" aria-hidden="true">ER</span>
+              <div>
+                <strong>데이터베이스를 읽을 수 없습니다</strong>
+                <p id="error-detail">파일 형식과 정적 서버 경로를 확인해 주세요.</p>
+              </div>
+            </div>
+
+            <div class="table-wrap" id="table-wrap" hidden>
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">품목명</th>
+                    <th scope="col">상표명</th>
+                    <th scope="col">회사</th>
+                    <th scope="col">작물</th>
+                    <th scope="col">병해충</th>
+                    <th scope="col">희석배수</th>
+                    <th scope="col">사용적기</th>
+                    <th scope="col">안전사용기준(시기·횟수)</th>
+                  </tr>
+                </thead>
+                <tbody id="results-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <span>NONGYAK KNOWLEDGE BASE</span>
+        <span>DATA SOURCE / RDA PSIS OPEN API</span>
+      </footer>
+    </div>
+  </body>
+</html>

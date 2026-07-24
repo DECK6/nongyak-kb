@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<service>
+<totalCount>5</totalCount>
+<list>
+<item>
+<pestiCode>1544</pestiCode>
+<diseaseUseSeq>1</diseaseUseSeq>
+<cropName>과원</cropName>
+<diseaseWeedName>일년생잡초</diseaseWeedName>
+<useName>제초제</useName>
+<pestiKorName>글리포세이트이소프로필아민 액제</pestiKorName>
+<pestiBrandName>근사미</pestiBrandName>
+<compName>한국삼공(주)</compName>
+<engName>glyphosate-isopropylammonium SL41 %</engName>
+<cmpaItmNm>수입</cmpaItmNm>
+<indictSymbl>사9</indictSymbl>
+<applyFirstRegDate>19770615</applyFirstRegDate>
+<cropCd>9100</cropCd>
+<cropLrclCd>90</cropLrclCd>
+<cropLrclNm>기타</cropLrclNm>
+<pestiUse>잡초 생육기 경엽처리</pestiUse>
+<dilutUnit>100배 -</dilutUnit>
+<useSuittime>-</useSuittime>
+<useNum>-</useNum>
+<wafindex>3</wafindex>
+</item>
+<item>
+<pestiCode>2088</pestiCode>
+<diseaseUseSeq>4</diseaseUseSeq>
+<cropName>사과</cropName>
+<diseaseWeedName>탄저병</diseaseWeedName>
+<useName>살균제</useName>
+<pestiKorName>만코제브 수화제</pestiKorName>
+<pestiBrandName>다이센엠-45</pestiBrandName>
+<compName>(주)경농</compName>
+<engName>mancozeb WP75 %</engName>
+<cmpaItmNm>제조</cmpaItmNm>
+<indictSymbl>카</indictSymbl>
+<applyFirstRegDate>19680301</applyFirstRegDate>
+<cropCd>4100</cropCd>
+<cropLrclCd>10</cropLrclCd>
+<cropLrclNm>과수류</cropLrclNm>
+<pestiUse>발병초부터 10일 간격 경엽처리</pestiUse>
+<dilutUnit>500배 -</dilutUnit>
+<useSuittime>수확 30일 전까지</useSuittime>
+<useNum>4회 이내</useNum>
+<wafindex>1</wafindex>
+</item>
+</list>
+</service>

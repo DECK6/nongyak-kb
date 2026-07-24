@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<service>
+<pestiKorName>글리포세이트이소프로필아민 액제</pestiKorName>
+<useName>제초제</useName>
+<compName>한국삼공(주)</compName>
+<pestiBrandName>근사미</pestiBrandName>
+<pestiEngName>Glyphosate-isopropylammonium</pestiEngName>
+<regCpntQnty>41</regCpntQnty>
+<toxicGubun>Ⅲ</toxicGubun>
+<toxicName>보통독성</toxicName>
+<fishToxicGubun>Ⅲ급</fishToxicGubun>
+<cropName>과원</cropName>
+<diseaseWeedName>일년생잡초</diseaseWeedName>
+<pestiUse>잡초 생육기 경엽처리</pestiUse>
+<dilutUnit>100배 -</dilutUnit>
+<useSuittime>-</useSuittime>
+<useNum>-</useNum>
+</service>

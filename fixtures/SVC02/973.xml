@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<service>
+<pestiKorName>가스가마이신 액제</pestiKorName>
+<useName>살균제</useName>
+<compName>(주)동방아그로</compName>
+<pestiBrandName>가스가민</pestiBrandName>
+<pestiEngName>Kasugamycin</pestiEngName>
+<regCpntQnty>2.3</regCpntQnty>
+<toxicGubun>Ⅳ</toxicGubun>
+<toxicName>저독성</toxicName>
+<fishToxicGubun>Ⅲ급</fishToxicGubun>
+<cropName>벼</cropName>
+<diseaseWeedName>세균벼알마름병</diseaseWeedName>
+<pestiUse>출수직전부터 7일 간격 경엽처리</pestiUse>
+<dilutUnit>1000배 -</dilutUnit>
+<useSuittime>수확 14일 전까지</useSuittime>
+<useNum>5회 이내</useNum>
+</service>

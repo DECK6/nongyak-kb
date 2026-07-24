@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<service>
+<totalCount>5</totalCount>
+<list>
+<item>
+<pestiCode>973</pestiCode>
+<diseaseUseSeq>1</diseaseUseSeq>
+<cropName>벼</cropName>
+<diseaseWeedName>세균벼알마름병</diseaseWeedName>
+<useName>살균제</useName>
+<pestiKorName>가스가마이신 액제</pestiKorName>
+<pestiBrandName>가스가민</pestiBrandName>
+<compName>(주)동방아그로</compName>
+<engName>kasugamycin SL2.3 %</engName>
+<cmpaItmNm>제조</cmpaItmNm>
+<indictSymbl>라3</indictSymbl>
+<applyFirstRegDate>19950311</applyFirstRegDate>
+<cropCd>1000</cropCd>
+<cropLrclCd>01</cropLrclCd>
+<cropLrclNm>미곡류</cropLrclNm>
+<pestiUse>출수직전부터 7일 간격 경엽처리</pestiUse>
+<dilutUnit>1000배 -</dilutUnit>
+<useSuittime>수확 14일 전까지</useSuittime>
+<useNum>5회 이내</useNum>
+<wafindex>1</wafindex>
+</item>
+<item>
+<pestiCode>973</pestiCode>
+<diseaseUseSeq>2</diseaseUseSeq>
+<cropName>배추</cropName>
+<diseaseWeedName>무름병</diseaseWeedName>
+<useName>살균제</useName>
+<pestiKorName>가스가마이신 액제</pestiKorName>
+<pestiBrandName>가스가민</pestiBrandName>
+<compName>(주)동방아그로</compName>
+<engName>kasugamycin SL2.3 %</engName>
+<cmpaItmNm>제조</cmpaItmNm>
+<indictSymbl>라3</indictSymbl>
+<applyFirstRegDate>19950311</applyFirstRegDate>
+<cropCd>2100</cropCd>
+<cropLrclCd>03</cropLrclCd>
+<cropLrclNm>엽채류</cropLrclNm>
+<pestiUse>발병초 10일 간격 경엽처리</pestiUse>
+<dilutUnit>1000배 -</dilutUnit>
+<useSuittime>수확 21일 전까지</useSuittime>
+<useNum>3회 이내</useNum>
+<wafindex>1</wafindex>
+</item>
+<item>
+<pestiCode>1201</pestiCode>
+<diseaseUseSeq>1</diseaseUseSeq>
+<cropName>밤</cropName>
+<diseaseWeedName>갈색날개매미충(ULV)</diseaseWeedName>
+<useName>살충제</useName>
+<pestiKorName>아세타미프리드 미탁제</pestiKorName>
+<pestiBrandName>일순위</pestiBrandName>
+<compName>(주)경농</compName>
+<engName>acetamiprid ME10 %</engName>
+<cmpaItmNm>제조</cmpaItmNm>
+<indictSymbl>4a</indictSymbl>
+<applyFirstRegDate>20090420</applyFirstRegDate>
+<cropCd>5310</cropCd>
+<cropLrclCd>12</cropLrclCd>
+<cropLrclNm>수실류</cropLrclNm>
+<pestiUse>다발생기 경엽처리</pestiUse>
+<dilutUnit>60배 3ℓ/10a</dilutUnit>
+<useSuittime>수확 14일전</useSuittime>
+<useNum>2회 이내</useNum>
+<wafindex>2</wafindex>
+</item>
+</list>
+</service>

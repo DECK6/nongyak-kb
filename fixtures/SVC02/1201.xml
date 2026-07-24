@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<service>
+<pestiKorName>아세타미프리드 미탁제</pestiKorName>
+<useName>살충제</useName>
+<compName>(주)경농</compName>
+<pestiBrandName>일순위</pestiBrandName>
+<pestiEngName>Acetamiprid</pestiEngName>
+<regCpntQnty>10</regCpntQnty>
+<toxicGubun>Ⅲ</toxicGubun>
+<toxicName>보통독성</toxicName>
+<fishToxicGubun>Ⅲ급</fishToxicGubun>
+<cropName>밤</cropName>
+<diseaseWeedName>갈색날개매미충(ULV)</diseaseWeedName>
+<pestiUse>다발생기 경엽처리</pestiUse>
+<dilutUnit>60배 3ℓ/10a</dilutUnit>
+<useSuittime>수확 14일전</useSuittime>
+<useNum>2회 이내</useNum>
+</service>

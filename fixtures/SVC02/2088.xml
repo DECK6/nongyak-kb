@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<service>
+<pestiKorName>만코제브 수화제</pestiKorName>
+<useName>살균제</useName>
+<compName>(주)경농</compName>
+<pestiBrandName>다이센엠-45</pestiBrandName>
+<pestiEngName>Mancozeb</pestiEngName>
+<regCpntQnty>75</regCpntQnty>
+<toxicGubun>Ⅳ</toxicGubun>
+<toxicName>저독성</toxicName>
+<fishToxicGubun>Ⅲ급</fishToxicGubun>
+<cropName>사과</cropName>
+<diseaseWeedName>탄저병</diseaseWeedName>
+<pestiUse>발병초부터 10일 간격 경엽처리</pestiUse>
+<dilutUnit>500배 -</dilutUnit>
+<useSuittime>수확 30일 전까지</useSuittime>
+<useNum>4회 이내</useNum>
+</service>

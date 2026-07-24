@@ -1,0 +1,7 @@
+.env
+node_modules/
+data/raw/
+data/kb.sqlite*
+dist/
+.venv-shacl/
+nongyak-kb.graphify/

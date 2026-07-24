@@ -1,0 +1,2 @@
+fetch failed: EINTR: interrupted system call, open '/Volumes/data/Dev/nongyak-kb/data/raw/SVC01/page-0505.xml'
+fetch failed: EINTR: interrupted system call, open '/Volumes/data/Dev/nongyak-kb/data/raw/SVC01/page-0646.xml'

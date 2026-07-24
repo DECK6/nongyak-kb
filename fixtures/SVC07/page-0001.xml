@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<service>
+<totalCount>2</totalCount>
+<list>
+<item>
+<tchprductIngrSn>1143</tchprductIngrSn>
+<gnrlNmEng>Flumioxazin</gnrlNmEng>
+<gnrlNmKor>플루미옥사진</gnrlNmKor>
+<amndFilNm>http://psis.rda.go.kr/uploadDocs/tchpr/tchpr_20131129101618.pdf</amndFilNm>
+</item>
+<item>
+<tchprductIngrSn>0877</tchprductIngrSn>
+<gnrlNmEng>Mancozeb</gnrlNmEng>
+<gnrlNmKor>만코제브</gnrlNmKor>
+<procsAnalsFilInfn>공정분석법 제2011-1호</procsAnalsFilInfn>
+<amndFilNm>http://psis.rda.go.kr/uploadDocs/tchpr/tchpr_20110302090000.pdf</amndFilNm>
+</item>
+</list>
+</service>
