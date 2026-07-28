@@ -1,29 +1,40 @@
 {
   "schema_version": 1,
   "milestone": "M1",
-  "phase": "P1-implementation",
+  "phase": "P3-qa-round2",
   "gate": "done",
   "status": "complete",
   "owner_runtime": "claude-code",
   "acceptance_criteria": [
-    "bun test 전체 통과",
-    "mock E2E: fetch --mock → normalize → export → cli 쿼리 성공",
-    "실데이터: 수집건수==totalCount, SHACL 통과, 샘플 20건 PSIS 대조",
-    "웹앱 검색 시나리오 동작"
+    "bun test 전체 통과 + tsc clean",
+    "CLI 검색과 웹 검색이 같은 컬럼·같은 규칙으로 동작해 결과가 일치",
+    "처방 경로(rotate)가 등록취소 제품을 내보내지 않고, 검색 경로가 등록상태를 노출",
+    "용도 필터가 복합제(균충·충초)를 해당 용도에 포함",
+    "이름 기반 IRI가 DB 개체 수와 1:1 (병해충·성분·회사)",
+    "products.apply_first_reg_date가 수집 순서와 무관한 최소값",
+    "조용한 유실·잘림·해석 모호성이 사용자에게 드러남"
   ],
   "evidence": [
-    "실수집(2026-07-24): SVC01 144,073/144,073 (중복 0, (pestiCode,diseaseUseSeq) 전역 유일 확인), SVC02 3,961/3,961 누락 0, SVC07 385, SVC08 401",
-    "normalize: products 3,961 / crops 426 / pests 990 / usage_rules 144,073 / FTS 144,073, 충돌 0",
-    "bun test 13/13, tsc clean",
-    "SHACL: 실데이터 ontology.ttl(53MB) pyshacl Conforms exit 0",
-    "팩트체크: 무작위 20건 API 교차 경로 대사 20/20 일치 + PSIS 웹 화면(가스가민) 필드 전항목 일치",
-    "웹앱 headless: 실 DB 91MB 로드, DATABASE READY, 144,073건, 200행 렌더",
-    "버그 수정 3건: schema.sql WAL 제거(sql.js 호환), fetch.ts EINTR 쓰기 재시도, fetch.ts startPoint 오프셋 의미론(매뉴얼 오기 — 페이지가 아니라 아이템 오프셋, 실측 확정), cli.ts 다단어 검색 토큰 AND"
+    "2개 독립 QA 패스(Opus 5, Codex sol) 병렬 실행 — 두 패스 발견을 재현 검증해 10건 수정",
+    "bun test 28/28 pass (2026-07-28), bunx tsc --noEmit exit 0, SHACL Conforms, PRAGMA integrity_check ok",
+    "[회귀 수정] P2의 slug()가 쉼표를 지워 잡초 목록 병해충 2건이 한 IRI로 병합(990→989). 쉼표·플러스 보존 + assertDistinctSlugs로 export 시 충돌을 실패 처리. 재생성 후 TTL pest IRI 990 = DB 990",
+    "[검색 통일] CLI가 FTS5 접두 매치라 토큰 중간·끝을 놓쳤다: strobin CLI 0 vs 웹 18,697, conazole 0 vs 8,864, 고추 3,675 vs 4,895(단고추류 1,216행 = 파프리카 약제 누락), 벼 4,063 vs 5,105(기계이앙벼 761). CLI를 웹과 같은 7컬럼 LIKE로 통일 — 전 검색어 일치 확인. 성능 0.23s → 0.11s(LIKE 풀스캔 91ms). fts_usage는 색인만 유지",
+    "[등록취소 노출] v_usage에 등록상태가 없어 rotate가 실효 등록을 처방했다(취소 판정 제품이 v_usage에 1,203행). rotate에서 제외+excludedRevoked 보고, query TSV에 '등록상태' 열/JSON에 revoked, 웹 표에 열+cell-revoked 스타일. 실측: 균메카 456건 중 59행 등록취소 표시, rotate '고추 역병' → '등록취소 제외: 6종'. 사실과 다른 주석도 정정",
+    "[용도 필터] use_name 실값은 살충 85,851 / 살균 49,441 / 제초 6,391 / 균충 1,613 / 생조 520 / 기타 246 / 충초 11. 전체 문자열 매칭이라 복합제 1,624행이 모든 용도 필터에서 누락됐다. 한 글자 매칭으로 수정 — 깨씨무늬병 살균제 104 → 164건(전체와 일치), 기타 60 → 0건",
+    "[등록일] applyFirstRegDate는 사용기준별로 다르게 오는데 첫 행 값을 제품 속성으로 승격해 3,961개 중 1,851개가 최소값이 아니었다(평균 8년, 최대 42년 지연). MIN으로 수정 — 재생성 후 stored<>min 0건, 9493 뷰타클로르 유제 20230309 → 19810225",
+    "[모호성 경고] rotate --used가 여러 계열로 해석될 때 좁은 쪽을 조용히 골라 회피 범위가 줄었다. ambiguousUsed로 노출 — '카브리오' → '다3+아5 / 다3+카 / 다3 중 다3로 해석' 경고",
+    "[유실·잘림 관측] PSIS가 품목등록번호를 재사용해(29-살충-2) PK가 1건을 조용히 버림 → droppedRevoked 리포트. query가 limit+1을 읽어 잘림을 stderr로 알림",
+    "[계약 동기화] contracts/interfaces.md의 CLI 검색 명세를 실제 구현(LIKE 7컬럼, 등록상태 열, revoked/ambiguousUsed/excludedRevoked)에 맞춰 갱신",
+    "웹 실브라우저 최종: DATABASE READY, 9열, 깨씨무늬병 살균제 164건, strobin 17,182건, 균메카 456건 중 59행 등록취소, 두류 4건"
   ],
   "blockers": [],
   "next": [
-    "백로그: MCP 서버화, 식약처 MRL 연계, GitHub Pages 배포(kb.sqlite 91MB 최적화 필요), graphify 시각화, wafindex 의미 규명",
-    "갱신 운영: bun run fetch(재개형) → normalize → export 재실행으로 주기 갱신 가능"
+    "미수정(데이터 한계): ① 회사명 표기 변형으로 등록취소 1건 미탐((주)탑프레쉬 vs (주)탑후레쉬) ② 동일 (품목명,상표명,회사) 제품이 복수 품목코드로 존재해 취소 1건이 최대 3건에 전파 — 현 필드로는 구분 불가. 편집거리 매칭은 P2에서 잡은 오탐 35건을 되살릴 위험이 커서 보류",
+    "미수정(기존 결함): ingredientName() 정규식이 복합제 함량표기 '(a+b)'를 못 파싱해 products 1,572/3,961(39.7%)에서 성분명 대신 제품 스펙 전체가 성분 노드가 됨",
+    "미수정(경미): rotate 헤더의 'N종'이 제품 수가 아니라 행 수 / '회피 — 같은 계열 포함' 버킷에 작용기작 없는 제품이 섞임(전착제 등) / parseModeOfAction이 '미분류(살균제)'를 실재 계열로 취급(226개 제품) / query 무결과 시 stdout 무음 / graph.json이 revoked에서도 company 노드를 만들어 TTL(96)보다 6개 많음",
+    "미수정(설계): usage_rules에 사용기준별 등록일 원 granularity 미보존 — 제품 레벨 MIN만 저장",
+    "웹 회귀 테스트 하네스 없음 — buildWhereClause가 IIFE에 갇혀 용도 필터/gz 로드가 브라우저 수동 검증에만 의존",
+    "백로그: MCP 서버화, 식약처 MRL 연계, GitHub Pages 배포(압축본 13.3MB), wafindex 의미 규명"
   ],
-  "updated_at": "2026-07-24T18:45:00+09:00"
+  "updated_at": "2026-07-28T22:30:00+09:00"
 }

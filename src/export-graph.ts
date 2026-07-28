@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { matchesRevoked } from "./revoked";
 
 type GraphNode = {
   id: string;
@@ -57,21 +58,6 @@ type UsageRow = {
 
 function productLabel(name: string, brand: string | null): string {
   return brand ? `${name}(${brand})` : name;
-}
-
-function matchesRevoked(product: ProductRow, revoked: RevokedRow): boolean {
-  if (product.pesti_code === revoked.prdlst_regist_no) return true;
-  if (
-    revoked.pesti_kor_name === product.pesti_kor_name &&
-    (!product.brand_name || !revoked.brand_name || product.brand_name === revoked.brand_name)
-  ) {
-    return true;
-  }
-  return Boolean(
-    product.brand_name &&
-      revoked.brand_name === product.brand_name &&
-      (!product.comp_name || !revoked.comp_name || product.comp_name === revoked.comp_name),
-  );
 }
 
 export function exportGraph(opts?: { dbPath?: string; outPath?: string }): string {

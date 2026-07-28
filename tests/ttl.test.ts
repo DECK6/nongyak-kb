@@ -14,6 +14,74 @@ afterEach(() => {
   }
 });
 
+test("builds ingredient IRIs that survive a Turtle round trip", () => {
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), "nongyak-kb-iri-"));
+  const dbPath = join(temporaryDirectory, "kb.sqlite");
+  const outDir = join(temporaryDirectory, "dist");
+  temporaryDirectories.push(temporaryDirectory);
+
+  const db = new Database(dbPath, { create: true });
+  db.exec(
+    readFileSync(resolve(import.meta.dir, "../contracts/schema.sql"), "utf8"),
+  );
+  // 미생물 농약 성분명에는 '/'와 '^'가 들어간다 — IRI로 그대로 쓰면 경로가 깨진다
+  db.query(
+    `INSERT INTO products (
+      pesti_code, pesti_kor_name, brand_name, comp_name, eng_name,
+      ingredient_name, use_name
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    "9001",
+    "바실루스 수화제",
+    "미생물킹",
+    "(주)바이오",
+    "Bacillus subtilis DBB-1501 WP 1.0x10^9 cfu/g",
+    "Bacillus subtilis DBB-1501 WP 1.0x10^9 cfu/g",
+    "살균제",
+  );
+  db.close();
+
+  const { ontologyPath } = exportTtl({ dbPath, outDir });
+  const ontology = readFileSync(ontologyPath, "utf8");
+  const ingredientIris = new Parser()
+    .parse(ontology)
+    .map((quad) => quad.subject.value)
+    .filter((value) => value.includes("ingredient-"));
+
+  expect(ingredientIris.length).toBeGreaterThan(0);
+  for (const iri of ingredientIris) {
+    expect(iri.slice(iri.indexOf("ingredient-"))).not.toContain("/");
+    expect(iri).not.toContain("^");
+  }
+});
+
+test("gives names that differ only by punctuation distinct IRIs", () => {
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), "nongyak-kb-uniq-"));
+  const dbPath = join(temporaryDirectory, "kb.sqlite");
+  const outDir = join(temporaryDirectory, "dist");
+  temporaryDirectories.push(temporaryDirectory);
+
+  const db = new Database(dbPath, { create: true });
+  db.exec(
+    readFileSync(resolve(import.meta.dir, "../contracts/schema.sql"), "utf8"),
+  );
+  // 잡초 목록 병해충명은 쉼표 유무로만 갈리는 쌍이 실제로 존재한다
+  const insertPest = db.query("INSERT INTO pests (pest_id, name) VALUES (?, ?)");
+  insertPest.run(1, "일년생잡초(가막사리, 물달개비, 자귀풀, 피)");
+  insertPest.run(2, "일년생잡초(가막사리, 물달개비, 자귀풀 피)");
+  db.close();
+
+  const { ontologyPath } = exportTtl({ dbPath, outDir });
+  const pestIris = new Set(
+    new Parser()
+      .parse(readFileSync(ontologyPath, "utf8"))
+      .map((quad) => quad.subject.value)
+      .filter((value) => value.includes("/pest-")),
+  );
+
+  expect(pestIris.size).toBe(2);
+});
+
 test("exports fixture-based normalized data and SHACL shapes as valid Turtle", () => {
   const temporaryDirectory = mkdtempSync(join(tmpdir(), "nongyak-kb-ttl-"));
   const dbPath = join(temporaryDirectory, "kb.sqlite");

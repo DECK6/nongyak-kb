@@ -7,6 +7,7 @@
     "fetch": "bun run src/fetch.ts",
     "normalize": "bun run src/normalize.ts",
     "export": "bun run src/export-ttl.ts && bun run src/export-graph.ts",
+    "compress": "gzip -9 -c data/kb.sqlite > data/kb.sqlite.gz",
     "cli": "bun run src/cli.ts",
     "test": "bun test"
   },

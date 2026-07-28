@@ -44,16 +44,21 @@ nongyak-kb/
 
 ## CLI 명세 (RAG 소비 계약 — 에이전트가 Bash로 호출)
 
-- `kb query "<검색어>"` — fts_usage 매치, 기본 20건. 공백 구분 토큰을 각각 phrase-escape 후
-  AND 결합 (다중 컬럼 매치 지원, FTS 연산자는 리터럴 취급). 출력: TSV (헤더 포함:
-  `품목명 상표명 회사 작물 병해충 희석배수 사용적기 안전사용기준`)
-- `kb query "<검색어>" --json` — v_usage 행 JSON 배열, 결과 없음은 `[]`
+- `kb query "<검색어>"` — v_usage 부분일치 검색, 기본 20건. 공백 구분 토큰을 AND 결합하고
+  각 토큰은 작물·병해충·품목·상표·회사·영문명·성분명 7개 컬럼에 부분일치(LIKE)한다.
+  웹앱과 같은 컬럼·같은 매치 규칙이라 양쪽 결과가 일치한다 (fts_usage는 색인만 유지).
+  결과가 limit에서 잘리면 stderr로 알린다. 출력: TSV (헤더 포함:
+  `품목명 상표명 회사 작물 병해충 희석배수 사용적기 안전사용기준 등록상태`)
+- `kb query "<검색어>" --json` — v_usage 행 JSON 배열 + `revoked` 불리언, 결과 없음은 `[]`
 - `kb product "<품목명|상표명>"` — 제품 상세 + 해당 usage_rules 전부, 등록취소 여부 표시
 - `kb rotate "<작물 병해충>" --used <약제명|작용기작> [--used ...] [--json]` — 작용기작 로테이션 추천.
   작물×병해충으로 등록 약제를 스코프한 뒤 `indict_symbl`(IRAC/FRAC 계열, 복합제는 `+` 결합)을
   파싱해, 올해 쓴 약제의 계열과 **겹치지 않는** 약제를 "권장", 겹치는 약제를 "회피"로 분류.
   `--used`가 성분명이면 매치된 약제 중 계열 수 최소 제형으로 해석(과잉 확장 방지), 전착제 등
-  비대상 성분은 판정 제외. 해석 실패 시 exit 0 + stderr 안내. TSV(작용기작·품목·상표·회사·희석배수·안전사용기준) 또는 JSON `{scope,usedGroups,unresolved,recommended,avoid}`
+  비대상 성분은 판정 제외. 해석이 갈리면 stderr로 경고하고 `ambiguousUsed`에 남긴다.
+  등록취소 제품은 처방에서 제외하고 `excludedRevoked`로 건수를 보고한다.
+  해석 실패 시 exit 0 + stderr 안내. TSV(작용기작·품목·상표·회사·희석배수·안전사용기준) 또는
+  JSON `{scope,usedGroups,unresolved,ambiguousUsed,recommended,avoid,excludedRevoked}`
 - `kb stats` — 테이블별 건수, 수집일
 - 종료코드: 결과 없음 0(빈 출력), 오류 1
 

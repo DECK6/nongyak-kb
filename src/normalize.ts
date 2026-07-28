@@ -14,6 +14,7 @@ export interface NormalizeReport {
   counts: Record<string, number>;
   duplicateUsageKeys: number;
   cropCdConflicts: number;
+  droppedRevoked: number;
 }
 
 type XmlRecord = Record<string, unknown>;
@@ -166,6 +167,16 @@ function ingredientName(engName: string | null): string | null {
   );
 }
 
+// PSIS가 작물명만 주고 cropCd를 비워 보내는 행이 있다(대분류명 "두류"/"서류" 등).
+// crops의 PK가 코드라 그대로 두면 작물명이 통째로 유실되므로, 실제 코드와 겹치지
+// 않는 접두사로 이름 기반 코드를 합성해 보존한다.
+function cropCode(row: { crop_cd: string | null; crop_name: string | null }): string | null {
+  if (row.crop_cd !== null) {
+    return row.crop_cd;
+  }
+  return row.crop_name === null ? null : `NC-${row.crop_name}`;
+}
+
 function rowCount(db: Database, table: string): number {
   return Number(
     (
@@ -307,6 +318,7 @@ export function normalize(opts?: {
   const db = new Database(dbPath, { create: true });
   let duplicateUsageKeys = 0;
   let cropCdConflicts = 0;
+  let droppedRevoked = 0;
 
   try {
     db.exec(
@@ -439,6 +451,20 @@ export function normalize(opts?: {
           fish_toxic_gubun
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
+      // applyFirstRegDate는 사용기준(작물×병해충)별로 다르게 온다. 첫 행 값을 제품
+      // 속성으로 승격하면 API 페이지 순서에 따라 값이 달라지므로 최소값을 쓴다.
+      const earliestRegDate = new Map<string, string>();
+      for (const row of svc01Rows) {
+        const date = row.apply_first_reg_date;
+        if (date === null || date === "") {
+          continue;
+        }
+        const previous = earliestRegDate.get(row.pesti_code);
+        if (previous === undefined || date < previous) {
+          earliestRegDate.set(row.pesti_code, date);
+        }
+      }
+
       const productCodes = new Set<string>();
       for (const row of svc01Rows) {
         if (productCodes.has(row.pesti_code)) {
@@ -460,7 +486,7 @@ export function normalize(opts?: {
           row.cmpa_itm_nm,
           row.indict_symbl,
           row.use_name,
-          row.apply_first_reg_date,
+          earliestRegDate.get(row.pesti_code) ?? row.apply_first_reg_date,
           detail?.reg_cpnt_qnty ?? null,
           detail?.toxic_gubun ?? null,
           detail?.toxic_name ?? null,
@@ -470,12 +496,13 @@ export function normalize(opts?: {
 
       const firstCropName = new Map<string, string>();
       for (const row of svc01Rows) {
-        if (row.crop_cd === null || row.crop_name === null) {
+        const cropCd = cropCode(row);
+        if (cropCd === null || row.crop_name === null) {
           continue;
         }
-        const existingName = firstCropName.get(row.crop_cd);
+        const existingName = firstCropName.get(cropCd);
         if (existingName === undefined) {
-          firstCropName.set(row.crop_cd, row.crop_name);
+          firstCropName.set(cropCd, row.crop_name);
         } else if (existingName !== row.crop_name) {
           cropCdConflicts++;
         }
@@ -487,16 +514,13 @@ export function normalize(opts?: {
       `);
       const cropCodes = new Set<string>();
       for (const row of usageRows) {
-        if (
-          row.crop_cd === null ||
-          row.crop_name === null ||
-          cropCodes.has(row.crop_cd)
-        ) {
+        const cropCd = cropCode(row);
+        if (cropCd === null || row.crop_name === null || cropCodes.has(cropCd)) {
           continue;
         }
-        cropCodes.add(row.crop_cd);
+        cropCodes.add(cropCd);
         insertCrop.run(
-          row.crop_cd,
+          cropCd,
           row.crop_name,
           row.crop_lrcl_cd,
           row.crop_lrcl_nm,
@@ -526,12 +550,11 @@ export function normalize(opts?: {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const row of usageRows) {
+        const cropCd = cropCode(row);
         insertUsage.run(
           row.pesti_code,
           row.disease_use_seq,
-          row.crop_cd !== null && cropCodes.has(row.crop_cd)
-            ? row.crop_cd
-            : null,
+          cropCd !== null && cropCodes.has(cropCd) ? cropCd : null,
           row.disease_weed_name === null
             ? null
             : (pestIds.get(row.disease_weed_name) ?? null),
@@ -549,8 +572,10 @@ export function normalize(opts?: {
           brand_name, comp_name, cmpa_itm_nm, revoked_date
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
+      // PSIS는 같은 품목등록번호를 서로 다른 제품에 재사용한다. schema의 PK가
+      // 이를 걸러내므로, 몇 건이 버려졌는지 리포트로 드러낸다.
       for (const row of svc08Rows) {
-        insertRevoked.run(
+        const inserted = insertRevoked.run(
           requiredText(
             row.prdlst_regist_no,
             "prdlstRegistNo",
@@ -564,6 +589,9 @@ export function normalize(opts?: {
           row.cmpa_itm_nm,
           row.prdlst_abl_de,
         );
+        if (inserted.changes === 0) {
+          droppedRevoked++;
+        }
       }
 
       const insertAnalysis = db.query(`
@@ -618,7 +646,7 @@ export function normalize(opts?: {
       counts[table] = rowCount(db, table);
     }
 
-    return { counts, duplicateUsageKeys, cropCdConflicts };
+    return { counts, duplicateUsageKeys, cropCdConflicts, droppedRevoked };
   } finally {
     db.close();
   }
@@ -633,4 +661,5 @@ if (import.meta.main) {
   }
   console.log(`- 중복 사용 키: ${report.duplicateUsageKeys.toLocaleString("ko-KR")}건`);
   console.log(`- 작물 코드 이름 충돌: ${report.cropCdConflicts.toLocaleString("ko-KR")}건`);
+  console.log(`- 등록번호 중복으로 버린 등록취소: ${report.droppedRevoked.toLocaleString("ko-KR")}건`);
 }

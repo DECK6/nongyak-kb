@@ -87,6 +87,43 @@ beforeAll(() => {
       '3100', '1', '사과', '탄저병', '디페노코나졸 액상수화제',
       '푸름이', '(주)팜한농', 'difenoconazole SC10 %', '살균제'
     );
+    -- 같은 회사가 같은 상표로 제형만 바꿔 재등록한 이력: 현행 3100은 등록 상태다
+    INSERT INTO revoked_products (
+      prdlst_regist_no, cmpa_itm_nm, pesti_kor_name, eng_name,
+      regist_stndrd, brand_name, comp_name, revoked_date
+    ) VALUES (
+      '2001-살균-3', '제조', '디페노코나졸 수화제', 'difenoconazole',
+      '10%', '푸름이', '(주)팜한농', '2022-03-26'
+    );
+    -- 품목명·상표명·회사가 모두 일치하는 실제 등록취소 제품
+    INSERT INTO products (
+      pesti_code, pesti_kor_name, brand_name, comp_name, eng_name,
+      ingredient_name, cmpa_itm_nm, indict_symbl, use_name,
+      apply_first_reg_date, reg_cpnt_qnty, toxic_gubun, toxic_name, fish_toxic_gubun
+    ) VALUES (
+      '4200', '카보퓨란 입제', '후라단', '(주)농사랑', 'carbofuran GR3 %',
+      'carbofuran', '제조', '나', '살충제', '19900101', '3', 'Ⅱ', '보통독성', 'Ⅱ급'
+    );
+    INSERT INTO revoked_products (
+      prdlst_regist_no, cmpa_itm_nm, pesti_kor_name, eng_name,
+      regist_stndrd, brand_name, comp_name, revoked_date
+    ) VALUES (
+      '3001-살충-7', '제조', '카보퓨란 입제', 'carbofuran',
+      '3%', '후라단', '(주)농사랑', '2023-01-31'
+    );
+    INSERT INTO usage_rules (
+      pesti_code, disease_use_seq, crop_cd, pest_id, pesti_use,
+      dilut_unit, use_suittime, use_num, wafindex
+    ) VALUES (
+      '4200', '1', '4100', 1, '발병초 토양처리', '3kg/10a', '수확 60일 전까지', '1회 이내', '1'
+    );
+    INSERT INTO fts_usage (
+      pesti_code, disease_use_seq, crop_name, pest_name, pesti_kor_name,
+      brand_name, comp_name, eng_name, use_name
+    ) VALUES (
+      '4200', '1', '사과', '탄저병', '카보퓨란 입제',
+      '후라단', '(주)농사랑', 'carbofuran GR3 %', '살충제'
+    );
   `);
   db.close();
 });
@@ -98,20 +135,29 @@ describe("runCli", () => {
     expect(result.code).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.stdout.split("\n")[0]).toBe(
-      "품목명\t상표명\t회사\t작물\t병해충\t희석배수\t사용적기\t안전사용기준",
+      "품목명\t상표명\t회사\t작물\t병해충\t희석배수\t사용적기\t안전사용기준\t등록상태",
     );
     expect(result.stdout.split("\n").length).toBeGreaterThanOrEqual(2);
     expect(result.stdout).toContain("만코제브 수화제");
   });
 
   test("query --json emits a parseable v_usage row array", async () => {
-    const result = await invokeCli(["query", "탄저병", "--json", "--limit", "1"]);
+    const result = await invokeCli(["query", "탄저병", "--json"]);
     const rows = JSON.parse(result.stdout) as Array<Record<string, unknown>>;
 
     expect(result.code).toBe(0);
     expect(rows.length).toBeGreaterThanOrEqual(1);
-    expect(rows[0]?.pest_name).toBe("탄저병");
-    expect(rows[0]?.pesti_code).toBe("2088");
+    expect(rows.every((row) => row.pest_name === "탄저병")).toBe(true);
+    expect(rows.map((row) => row.pesti_code)).toContain("2088");
+  });
+
+  test("query warns when results are cut off by the limit", async () => {
+    const truncated = await invokeCli(["query", "탄저병", "--limit", "1"]);
+    const complete = await invokeCli(["query", "탄저병", "--limit", "50"]);
+
+    expect(truncated.stdout.split("\n").length).toBe(2);
+    expect(truncated.stderr).toContain("--limit");
+    expect(complete.stderr).toBe("");
   });
 
   test("query treats operators as phrase text and returns [] for no JSON results", async () => {
@@ -138,12 +184,94 @@ describe("runCli", () => {
     expect(data.avoid.map((r) => r.indict_symbl)).toContain("카");
   });
 
+  test("rotate never recommends a product this CLI reports as revoked", async () => {
+    const result = await invokeCli(["rotate", "사과 탄저병", "--used", "만코제브", "--json"]);
+    const data = JSON.parse(result.stdout) as {
+      recommended: Array<{ brand_name: string }>;
+      avoid: Array<{ brand_name: string }>;
+      excludedRevoked: number;
+    };
+
+    expect(result.code).toBe(0);
+    // 후라단은 등록취소 제품이므로 어느 목록에도 처방으로 등장해서는 안 된다
+    expect(data.recommended.map((row) => row.brand_name)).not.toContain("후라단");
+    expect(data.avoid.map((row) => row.brand_name)).not.toContain("후라단");
+    expect(data.excludedRevoked).toBe(1);
+  });
+
+  test("query marks whether each row's product is revoked", async () => {
+    const result = await invokeCli(["query", "탄저병", "--json"]);
+    const rows = JSON.parse(result.stdout) as Array<Record<string, unknown>>;
+
+    expect(result.code).toBe(0);
+    expect(rows.every((row) => typeof row.revoked === "boolean")).toBe(true);
+    expect(rows.some((row) => row.revoked === true)).toBe(true);
+    expect(rows.some((row) => row.revoked === false)).toBe(true);
+  });
+
+  test("rotate warns when a used agent resolves to more than one group set", async () => {
+    // '카브리오'류처럼 상표 접두가 여러 제형에 걸치면 계열 해석이 갈린다.
+    // 좁은 쪽으로 고르되 사용자가 그 사실을 알아야 저항성 관리가 어긋나지 않는다
+    const result = await invokeCli(["rotate", "사과 탄저병", "--used", "제", "--json"]);
+    const data = JSON.parse(result.stdout) as { ambiguousUsed: string[] };
+
+    expect(result.code).toBe(0);
+    expect(data.ambiguousUsed.length).toBeGreaterThanOrEqual(1);
+    expect(result.stderr).toContain("해석");
+  });
+
   test("rotate errors when the used agent cannot be resolved", async () => {
     const result = await invokeCli(["rotate", "사과 탄저병", "--used", "존재하지않는약"]);
 
     expect(result.code).toBe(0);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("작용기작을 확인할 수 없습니다");
+  });
+
+  test("query matches partial tokens anywhere in the value", async () => {
+    const prefix = await invokeCli(["query", "만코", "--json"]);
+    // 웹앱과 같은 부분일치여야 한다 — 'difenoconazole'의 'conazole'처럼
+    // 토큰 중간이나 끝만 입력해도 잡혀야 계열 검색이 성립한다
+    const infix = await invokeCli(["query", "conazole", "--json"]);
+    const suffix = await invokeCli(["query", "센엠", "--json"]);
+
+    expect(JSON.parse(prefix.stdout)[0]?.pesti_kor_name).toBe("만코제브 수화제");
+    expect(JSON.parse(infix.stdout)[0]?.pesti_kor_name).toBe("디페노코나졸 액상수화제");
+    expect(JSON.parse(suffix.stdout)[0]?.brand_name).toBe("다이센엠-45");
+  });
+
+  test("query orders results deterministically before applying the limit", async () => {
+    const first = await invokeCli(["query", "탄저병", "--json", "--limit", "1"]);
+    const second = await invokeCli(["query", "탄저병", "--json", "--limit", "1"]);
+    const rows = JSON.parse(first.stdout) as Array<Record<string, unknown>>;
+
+    expect(first.stdout).toBe(second.stdout);
+    // 품목명 오름차순이므로 '디페노코나졸'이 '만코제브'보다 먼저 온다
+    expect(rows[0]?.pesti_kor_name).toBe("디페노코나졸 액상수화제");
+  });
+
+  test("product keeps a re-registered product marked as registered", async () => {
+    const result = await invokeCli(["product", "푸름이"]);
+    const blocks = result.stdout.split("\n\n");
+    const current = blocks.find((block) =>
+      block.includes("품목명: 디페노코나졸 액상수화제"),
+    );
+    const retired = blocks.find((block) =>
+      block.includes("품목명: 디페노코나졸 수화제"),
+    );
+
+    expect(result.code).toBe(0);
+    // 현행 등록 제품은 등록 상태를 유지하고, 취소된 옛 제형은 별도 항목으로 보인다
+    expect(current).toContain("등록상태: 등록\n");
+    expect(retired).toContain("등록상태: 등록취소");
+  });
+
+  test("product marks a product revoked when name, brand, and company all match", async () => {
+    const result = await invokeCli(["product", "후라단"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("등록상태: 등록취소");
+    expect(result.stdout).toContain("등록취소일: 2023-01-31");
   });
 
   test("product finds partial brand matches and revoked-only products", async () => {
@@ -161,8 +289,8 @@ describe("runCli", () => {
     const result = await invokeCli(["stats"]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("products\t2");
-    expect(result.stdout).toContain("usage_rules\t2");
+    expect(result.stdout).toContain("products\t3");
+    expect(result.stdout).toContain("usage_rules\t3");
     expect(result.stdout).toContain("kb.sqlite mtime\t");
   });
 

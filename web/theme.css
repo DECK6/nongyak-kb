@@ -662,6 +662,12 @@ td.cell-accent {
   color: var(--color-cyan-bright);
 }
 
+td.cell-revoked {
+  color: var(--color-error);
+  background: var(--color-error-soft);
+  font-weight: var(--font-weight-medium);
+}
+
 th:nth-child(1),
 th:nth-child(2) {
   width: 12%;

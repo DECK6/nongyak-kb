@@ -2,6 +2,7 @@
   "use strict";
 
   const DATABASE_URL = "../data/kb.sqlite";
+  const COMPRESSED_DATABASE_URL = "../data/kb.sqlite.gz";
   const RESULT_LIMIT = 200;
   const DEBOUNCE_MS = 250;
   const SEARCH_COLUMNS = [
@@ -10,11 +11,15 @@
     "pesti_kor_name",
     "brand_name",
     "comp_name",
+    "eng_name",
+    "ingredient_name",
   ];
+  // use_name은 '살균'·'살충'·'제초' 외에 복합제 '균충'(살균+살충)·'충초'(살충+제초)도
+  // 쓴다. 한 글자로 매칭해야 복합제가 해당 용도 필터에 모두 잡힌다.
   const USAGE_TYPE_VALUES = {
-    살균제: "살균",
-    살충제: "살충",
-    제초제: "제초",
+    살균제: "균",
+    살충제: "충",
+    제초제: "초",
   };
   const PRIMARY_USAGE_TYPES = Object.keys(USAGE_TYPE_VALUES);
   const RESULT_COLUMNS = [
@@ -26,6 +31,7 @@
     { key: "dilut_unit", label: "희석배수" },
     { key: "pesti_use", label: "사용적기" },
     { key: "safety", label: "안전사용기준(시기·횟수)" },
+    { key: "status", label: "등록상태" },
   ];
 
   const elements = {
@@ -49,6 +55,12 @@
 
   let database = null;
   let debounceTimer = null;
+  // 등록취소 목록은 v_usage에 없다. 400건뿐이라 초기화 때 키로 올려두고 대조한다.
+  let revokedKeys = new Set();
+
+  function revokedKey(row) {
+    return [row.pesti_kor_name, row.brand_name, row.comp_name].join("␟");
+  }
 
   function escapeLike(value) {
     return value.replace(/[!%_]/gu, "!$&");
@@ -147,12 +159,19 @@
 
     for (const row of rows) {
       const tableRow = document.createElement("tr");
-      const view = { ...row, safety: formatSafety(row) };
+      const revoked = revokedKeys.has(revokedKey(row));
+      const view = {
+        ...row,
+        safety: formatSafety(row),
+        status: revoked ? "등록취소" : "등록",
+      };
 
       for (const column of RESULT_COLUMNS) {
-        tableRow.append(
-          createCell(column.label, view[column.key], column.className),
-        );
+        const cell = createCell(column.label, view[column.key], column.className);
+        if (column.key === "status" && revoked) {
+          cell.classList.add("cell-revoked");
+        }
+        tableRow.append(cell);
       }
       fragment.append(tableRow);
     }
@@ -262,16 +281,38 @@
     console.error("NONGYAK KB initialization failed:", error);
   }
 
+  // 원본 kb.sqlite는 91.5MB지만 gzip 압축본은 13.4MB다. 압축본이 있으면 그것을
+  // 받아 브라우저에서 풀고, 없거나 해제에 실패하면 원본을 그대로 내려받는다.
+  async function fetchDatabaseBuffer() {
+    if (typeof DecompressionStream === "function") {
+      try {
+        const response = await fetch(COMPRESSED_DATABASE_URL);
+        if (response.ok && response.body) {
+          // 서버가 Content-Encoding으로 이미 풀어 보냈다면 다시 풀지 않는다
+          const decoded = /gzip/iu.test(
+            response.headers.get("content-encoding") ?? "",
+          );
+          const stream = decoded
+            ? response.body
+            : response.body.pipeThrough(new DecompressionStream("gzip"));
+          const buffer = await new Response(stream).arrayBuffer();
+          if (buffer.byteLength) {
+            return buffer;
+          }
+        }
+      } catch (error) {
+        console.warn("압축 데이터베이스를 사용할 수 없어 원본을 내려받습니다:", error);
+      }
+    }
+
+    const response = await fetch(DATABASE_URL);
+    return response.ok ? await response.arrayBuffer() : null;
+  }
+
   async function initializeDatabase() {
     try {
-      const response = await fetch(DATABASE_URL, { cache: "no-store" });
-      if (!response.ok) {
-        showDataMissing();
-        return;
-      }
-
-      const fileBuffer = await response.arrayBuffer();
-      if (!fileBuffer.byteLength) {
+      const fileBuffer = await fetchDatabaseBuffer();
+      if (!fileBuffer || !fileBuffer.byteLength) {
         showDataMissing();
         return;
       }
@@ -280,6 +321,14 @@
         locateFile: (file) => new URL(`./vendor/${file}`, document.baseURI).href,
       });
       database = new SQL.Database(new Uint8Array(fileBuffer));
+      revokedKeys = new Set(
+        executeQuery(
+          `SELECT pesti_kor_name, brand_name, comp_name
+           FROM revoked_products
+           WHERE brand_name IS NOT NULL AND comp_name IS NOT NULL`,
+          [],
+        ).map(revokedKey),
+      );
 
       setControlsEnabled(true);
       updateDatabaseStatus("ready", "DATABASE READY", "LOCAL SQLITE / WASM");

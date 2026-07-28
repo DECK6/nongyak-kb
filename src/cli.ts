@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { matchesRevoked, type RevokedRecord } from "./revoked";
 
 type UsageRow = {
   pesti_code: string;
@@ -165,55 +166,98 @@ function tsvCell(value: string | null): string {
   return (value ?? "").replace(/[\t\r\n]+/g, " ");
 }
 
-function matchesRevoked(product: ProductRow, revoked: RevokedRow): boolean {
-  if (product.pesti_code === revoked.prdlst_regist_no) return true;
-  if (
-    revoked.pesti_kor_name === product.pesti_kor_name &&
-    (!product.brand_name || !revoked.brand_name || product.brand_name === revoked.brand_name)
-  ) {
-    return true;
+// 웹앱과 같은 컬럼·같은 부분일치로 검색한다. FTS5(unicode61)는 토큰 접두만 잡아
+// "conazole"이나 "단고추류" 같은 토큰 중간·끝 입력을 놓치는데, 계열 접미사 검색은
+// 농약 선택에서 흔한 사용법이라 웹과 결과가 갈리면 안 된다.
+const SEARCH_COLUMNS = [
+  "crop_name",
+  "pest_name",
+  "pesti_kor_name",
+  "brand_name",
+  "comp_name",
+  "eng_name",
+  "ingredient_name",
+] as const;
+
+function escapeLike(value: string): string {
+  return value.replace(/[!%_]/g, "!$&");
+}
+
+// 공백 구분 토큰을 AND 결합 — "고추 탄저병"처럼 작물·병해충이 다른 컬럼에 있어도 매치된다
+function buildSearchFilter(
+  search: string,
+): { sql: string; parameters: string[] } | null {
+  const tokens = search.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) {
+    return null;
   }
-  return Boolean(
-    product.brand_name &&
-      revoked.brand_name === product.brand_name &&
-      (!product.comp_name || !revoked.comp_name || product.comp_name === revoked.comp_name),
-  );
+  const clauses: string[] = [];
+  const parameters: string[] = [];
+  for (const token of tokens) {
+    clauses.push(
+      `(${SEARCH_COLUMNS.map(
+        (column) => `COALESCE(v.${column}, '') LIKE ? ESCAPE '!'`,
+      ).join(" OR ")})`,
+    );
+    const pattern = `%${escapeLike(token)}%`;
+    parameters.push(...SEARCH_COLUMNS.map(() => pattern));
+  }
+  return { sql: clauses.join(" AND "), parameters };
+}
+
+// v_usage에는 등록상태가 없다 — 등록취소 목록은 별도 테이블이므로 소비 시점에 대조한다
+function loadRevokedRecords(db: Database): RevokedRecord[] {
+  return db
+    .query("SELECT pesti_kor_name, brand_name, comp_name FROM revoked_products")
+    .all() as RevokedRecord[];
 }
 
 function queryCommand(db: Database, search: string, json: boolean, limit: number): void {
-  // 공백 구분 토큰을 각각 phrase-escape 후 AND 결합 — "고추 탄저병"처럼
-  // 작물·병해충이 다른 컬럼에 있어도 매치되어야 한다
-  const tokens = search.split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) {
+  const filter = buildSearchFilter(search);
+  if (filter === null) {
     if (json) console.log("[]");
     return;
   }
-  const phrase = tokens
-    .map((token) => `"${token.replaceAll('"', '""')}"`)
-    .join(" AND ");
   const rows = db
     .query(`
       SELECT v.*
-      FROM fts_usage
-      JOIN v_usage v
-        ON v.pesti_code = fts_usage.pesti_code
-       AND v.disease_use_seq = fts_usage.disease_use_seq
-      WHERE fts_usage MATCH ?
+      FROM v_usage v
+      WHERE ${filter.sql}
+      ORDER BY
+        v.pesti_kor_name, v.brand_name, v.crop_name, v.pest_name,
+        v.pesti_code, v.disease_use_seq
       LIMIT ?
     `)
-    .all(phrase, limit) as UsageRow[];
+    // 한 건 더 읽어 결과가 잘렸는지 알아낸다 — 잘린 줄 모르면 후보 약제를 놓친다
+    .all(...filter.parameters, limit + 1) as UsageRow[];
+  const truncated = rows.length > limit;
+  if (truncated) {
+    rows.length = limit;
+  }
   if (rows.length === 0) {
     if (json) console.log("[]");
     return;
   }
+
+  if (truncated) {
+    console.error(`결과가 --limit ${limit}에서 잘렸습니다 — 더 보려면 --limit을 늘리세요`);
+  }
+
+  // 검색 결과에는 등록취소된 제품도 섞여 나온다. 소비자가 구분할 수 있어야 한다.
+  const revokedRecords = loadRevokedRecords(db);
+  const marked = rows.map((row) => ({
+    ...row,
+    revoked: revokedRecords.some((record) => matchesRevoked(row, record)),
+  }));
+
   if (json) {
-    console.log(JSON.stringify(rows));
+    console.log(JSON.stringify(marked));
     return;
   }
 
   const lines = [
-    "품목명\t상표명\t회사\t작물\t병해충\t희석배수\t사용적기\t안전사용기준",
-    ...rows.map((row) =>
+    "품목명\t상표명\t회사\t작물\t병해충\t희석배수\t사용적기\t안전사용기준\t등록상태",
+    ...marked.map((row) =>
       [
         row.pesti_kor_name,
         row.brand_name,
@@ -223,6 +267,7 @@ function queryCommand(db: Database, search: string, json: boolean, limit: number
         row.dilut_unit,
         row.pesti_use,
         [row.use_suittime, row.use_num].filter(Boolean).join(" / "),
+        row.revoked ? "등록취소" : "등록",
       ]
         .map(tsvCell)
         .join("\t"),
@@ -388,29 +433,44 @@ function rotateCommand(
   used: string[],
   json: boolean,
 ): void {
-  const tokens = search.split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) {
+  const filter = buildSearchFilter(search);
+  if (filter === null) {
     console.error("작물·병해충 검색어가 필요합니다");
     return;
   }
-  const phrase = tokens.map((token) => `"${token.replaceAll('"', '""')}"`).join(" AND ");
-  // 작물×병해충으로 스코프한 등록 약제 (등록취소 제외 — v_usage는 유효 등록만)
-  const rows = db
+  // 작물×병해충으로 스코프한 약제. v_usage에는 등록취소 제품도 들어 있으므로
+  // 처방으로 내보내기 전에 등록취소 목록과 대조해 걸러낸다.
+  const allRows = db
     .query(`
       SELECT DISTINCT
         v.pesti_kor_name, v.brand_name, v.comp_name, v.indict_symbl,
         v.dilut_unit, v.use_suittime, v.use_num
-      FROM fts_usage
-      JOIN v_usage v
-        ON v.pesti_code = fts_usage.pesti_code
-       AND v.disease_use_seq = fts_usage.disease_use_seq
-      WHERE fts_usage MATCH ?
+      FROM v_usage v
+      WHERE ${filter.sql}
       ORDER BY v.pesti_kor_name, v.brand_name
     `)
-    .all(phrase) as RotateCandidate[];
+    .all(...filter.parameters) as RotateCandidate[];
+  const revokedRecords = loadRevokedRecords(db);
+  const rows = allRows.filter(
+    (row) => !revokedRecords.some((record) => matchesRevoked(row, record)),
+  );
+  const excludedRevoked = allRows.length - rows.length;
   if (rows.length === 0) {
-    if (json) console.log("[]");
-    else console.error(`해당 작물·병해충에 등록된 약제가 없습니다: ${search}`);
+    if (json) {
+      console.log(
+        JSON.stringify({
+          scope: search,
+          usedGroups: [],
+          unresolved: [],
+          ambiguousUsed: [],
+          recommended: [],
+          avoid: [],
+          excludedRevoked,
+        }),
+      );
+    } else {
+      console.error(`해당 작물·병해충에 등록된 약제가 없습니다: ${search}`);
+    }
     return;
   }
 
@@ -420,19 +480,29 @@ function rotateCommand(
   // 계열 수가 가장 적은 제형으로 해석해 회피 계열의 과잉 확장을 막는다.
   const usedGroups = new Set<string>();
   const unresolved: string[] = [];
+  const ambiguousUsed: string[] = [];
   for (const term of used) {
     const matched = rows.filter((row) =>
       `${row.pesti_kor_name} ${row.brand_name ?? ""}`.includes(term),
     );
     if (matched.length > 0) {
       let narrowest: Set<string> | undefined;
+      const variants = new Set<string>();
       for (const row of matched) {
         const groups = parseModeOfAction(row.indict_symbl);
-        if (groups.size > 0 && (!narrowest || groups.size < narrowest.size)) {
+        if (groups.size === 0) continue;
+        variants.add([...groups].sort().join("+"));
+        if (!narrowest || groups.size < narrowest.size) {
           narrowest = groups;
         }
       }
       if (narrowest) {
+        // 좁은 쪽으로 해석하면 회피 범위가 줄어든다 — 갈렸다는 사실을 반드시 알린다
+        if (variants.size > 1) {
+          ambiguousUsed.push(
+            `${term}: ${[...variants].join(" / ")} 중 ${[...narrowest].join(",")}로 해석`,
+          );
+        }
         for (const group of narrowest) usedGroups.add(group);
         continue;
       }
@@ -452,6 +522,10 @@ function rotateCommand(
     return;
   }
 
+  if (ambiguousUsed.length > 0) {
+    for (const note of ambiguousUsed) console.error(`사용 약제 해석 주의 — ${note}`);
+  }
+
   const recommended: RotateCandidate[] = [];
   const avoid: RotateCandidate[] = [];
   for (const row of rows) {
@@ -466,8 +540,10 @@ function rotateCommand(
         scope: search,
         usedGroups: [...usedGroups],
         unresolved,
+        ambiguousUsed,
         recommended,
         avoid,
+        excludedRevoked,
       }),
     );
     return;
@@ -488,6 +564,8 @@ function rotateCommand(
   const out: string[] = [];
   out.push(`# ${search} — 올해 사용 작용기작: ${[...usedGroups].join(", ")}`);
   if (unresolved.length > 0) out.push(`# 미해석 입력(무시됨): ${unresolved.join(", ")}`);
+  for (const note of ambiguousUsed) out.push(`# 해석 주의 — ${note}`);
+  if (excludedRevoked > 0) out.push(`# 등록취소 제외: ${excludedRevoked}종`);
   out.push("");
   out.push(`## 권장 — 다른 작용기작 계열 (${recommended.length}종)`);
   out.push("작용기작\t품목명\t상표명\t회사\t희석배수\t안전사용기준");

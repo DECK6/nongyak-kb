@@ -77,8 +77,28 @@ function dataTerm(kind: string, id: string) {
   return namedNode(`${DATA}${kind}-${id}`);
 }
 
+// 미생물 성분명("... 1.0x10^9 cfu/g")처럼 '/'나 '^'가 섞인 값을 그대로 IRI에 넣으면
+// 경로가 갈라지거나 Turtle 파서가 거부한다. 반대로 쉼표까지 지우면 잡초 목록
+// 병해충명처럼 구두점으로만 갈리는 이름이 같은 IRI로 합쳐지므로, IRI에서 허용되는
+// 구분자(',', '+')는 남기고 위험한 문자만 치환한다.
 function slug(value: string): string {
-  return value.trim().replace(/[\s()（）]+/g, "-");
+  return value.trim().replace(/[^\p{L}\p{N}._~,+-]+/gu, "-");
+}
+
+// 이름을 IRI로 쓰는 개체(병해충·성분·회사)는 slug이 겹치면 서로 다른 개체가 조용히
+// 하나로 합쳐진다. 산출물이 DB보다 적은 사실을 말하게 두지 않는다.
+function assertDistinctSlugs(kind: string, names: string[]): void {
+  const seen = new Map<string, string>();
+  for (const name of names) {
+    const key = slug(name);
+    const previous = seen.get(key);
+    if (previous !== undefined && previous !== name) {
+      throw new Error(
+        `${kind} IRI 충돌: "${previous}"와 "${name}"이 같은 slug(${key})로 축약됩니다`,
+      );
+    }
+    seen.set(key, name);
+  }
 }
 
 function addType(writer: Writer, subject: ReturnType<typeof namedNode>, type: string) {
@@ -139,6 +159,16 @@ function createOntology(
     writer.addQuad(subject, rdfType, rdfsClass);
     writer.addQuad(subject, rdfsLabel, literal(className));
   }
+
+  assertDistinctSlugs("Pest", pests.map((pest) => pest.name));
+  assertDistinctSlugs(
+    "ActiveIngredient",
+    products.flatMap((product) => product.ingredient_name ?? []),
+  );
+  assertDistinctSlugs(
+    "Company",
+    products.flatMap((product) => product.comp_name ?? []),
+  );
 
   const companySubjects = new Map<string, ReturnType<typeof namedNode>>();
   const ingredientSubjects = new Map<string, ReturnType<typeof namedNode>>();
