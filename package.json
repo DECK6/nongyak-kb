@@ -2,6 +2,7 @@
   "name": "nongyak-kb",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "fetch": "bun run src/fetch.ts",
