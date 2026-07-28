@@ -11,7 +11,12 @@
     "brand_name",
     "comp_name",
   ];
-  const PRIMARY_USAGE_TYPES = ["살균제", "살충제", "제초제"];
+  const USAGE_TYPE_VALUES = {
+    살균제: "살균",
+    살충제: "살충",
+    제초제: "제초",
+  };
+  const PRIMARY_USAGE_TYPES = Object.keys(USAGE_TYPE_VALUES);
   const RESULT_COLUMNS = [
     { key: "pesti_kor_name", label: "품목명", className: "cell-primary" },
     { key: "brand_name", label: "상표명", className: "cell-accent" },
@@ -66,7 +71,7 @@
 
     if (PRIMARY_USAGE_TYPES.includes(usageType)) {
       clauses.push("COALESCE(use_name, '') LIKE ? ESCAPE '!'");
-      parameters.push(`%${escapeLike(usageType)}%`);
+      parameters.push(`%${escapeLike(USAGE_TYPE_VALUES[usageType])}%`);
     } else if (usageType === "기타") {
       clauses.push(
         `(${PRIMARY_USAGE_TYPES.map(
@@ -74,7 +79,9 @@
         ).join(" AND ")})`,
       );
       parameters.push(
-        ...PRIMARY_USAGE_TYPES.map((type) => `%${escapeLike(type)}%`),
+        ...PRIMARY_USAGE_TYPES.map(
+          (type) => `%${escapeLike(USAGE_TYPE_VALUES[type])}%`,
+        ),
       );
     }
 
