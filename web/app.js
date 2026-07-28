@@ -264,7 +264,7 @@
 
   async function initializeDatabase() {
     try {
-      const response = await fetch(DATABASE_URL);
+      const response = await fetch(DATABASE_URL, { cache: "no-store" });
       if (!response.ok) {
         showDataMissing();
         return;
