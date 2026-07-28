@@ -59,13 +59,13 @@
     const parameters = [];
     const query = searchValue.trim();
 
-    if (query) {
+    for (const term of query.split(/\s+/u).filter(Boolean)) {
       clauses.push(
         `(${SEARCH_COLUMNS.map(
           (column) => `COALESCE(${column}, '') LIKE ? ESCAPE '!'`,
         ).join(" OR ")})`,
       );
-      const pattern = `%${escapeLike(query)}%`;
+      const pattern = `%${escapeLike(term)}%`;
       parameters.push(...SEARCH_COLUMNS.map(() => pattern));
     }
 
