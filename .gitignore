@@ -5,3 +5,4 @@ data/kb.sqlite*
 dist/
 .venv-shacl/
 nongyak-kb.graphify/
+.gstack/
