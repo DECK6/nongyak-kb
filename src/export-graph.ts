@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { ingredientNames } from "./ingredients";
 import { matchesRevoked } from "./revoked";
 
 type GraphNode = {
@@ -22,6 +23,7 @@ type ProductRow = {
   pesti_kor_name: string;
   brand_name: string | null;
   comp_name: string | null;
+  eng_name: string | null;
   ingredient_name: string | null;
   toxic_name: string | null;
   use_name: string | null;
@@ -91,7 +93,7 @@ export function exportGraph(opts?: { dbPath?: string; outPath?: string }): strin
       .query(`
         SELECT
           pesti_code, pesti_kor_name, brand_name, comp_name,
-          ingredient_name, toxic_name, use_name
+          eng_name, ingredient_name, toxic_name, use_name
         FROM products
         ORDER BY pesti_code
       `)
@@ -138,9 +140,12 @@ export function exportGraph(opts?: { dbPath?: string; outPath?: string }): strin
         props,
       });
 
-      if (product.ingredient_name) {
-        const ingredientId = `ingredient:${product.ingredient_name}`;
-        addNode({ id: ingredientId, type: "ingredient", label: product.ingredient_name });
+      for (const ingredientName of ingredientNames(
+        product.eng_name,
+        product.ingredient_name,
+      )) {
+        const ingredientId = `ingredient:${ingredientName}`;
+        addNode({ id: ingredientId, type: "ingredient", label: ingredientName });
         addEdge({ source: productId, target: ingredientId, type: "has_ingredient" });
       }
       if (product.comp_name) {

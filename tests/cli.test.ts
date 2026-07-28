@@ -104,6 +104,14 @@ beforeAll(() => {
       '4200', '카보퓨란 입제', '후라단', '(주)농사랑', 'carbofuran GR3 %',
       'carbofuran', '제조', '나', '살충제', '19900101', '3', 'Ⅱ', '보통독성', 'Ⅱ급'
     );
+    INSERT INTO products (
+      pesti_code, pesti_kor_name, brand_name, comp_name, eng_name,
+      ingredient_name, use_name
+    ) VALUES (
+      '5000', '아족시스트로빈·프로피코나졸 유현탁제', '복합킹', '(주)농약',
+      'Azoxystrobin.Propiconazole SE 18.71(7.01+11.7) %',
+      'Azoxystrobin.Propiconazole', '살균제'
+    );
     INSERT INTO revoked_products (
       prdlst_regist_no, cmpa_itm_nm, pesti_kor_name, eng_name,
       regist_stndrd, brand_name, comp_name, revoked_date
@@ -343,6 +351,26 @@ test("exportGraph writes contract nodes and applies_to edge", () => {
         edge.type === "applies_to",
     ),
   ).toBe(true);
+  expect(
+    graph.edges.filter(
+      (edge) =>
+        edge.source === "product:5000" &&
+        edge.type === "has_ingredient",
+    ),
+  ).toEqual(
+    expect.arrayContaining([
+      {
+        source: "product:5000",
+        target: "ingredient:Azoxystrobin",
+        type: "has_ingredient",
+      },
+      {
+        source: "product:5000",
+        target: "ingredient:Propiconazole",
+        type: "has_ingredient",
+      },
+    ]),
+  );
   expect(
     graph.edges.some(
       (edge) =>

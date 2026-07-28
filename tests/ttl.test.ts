@@ -82,6 +82,47 @@ test("gives names that differ only by punctuation distinct IRIs", () => {
   expect(pestIris.size).toBe(2);
 });
 
+test("exports one hasIngredient relation per compound constituent", () => {
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), "nongyak-kb-compound-"));
+  const dbPath = join(temporaryDirectory, "kb.sqlite");
+  const outDir = join(temporaryDirectory, "dist");
+  temporaryDirectories.push(temporaryDirectory);
+
+  const db = new Database(dbPath, { create: true });
+  db.exec(
+    readFileSync(resolve(import.meta.dir, "../contracts/schema.sql"), "utf8"),
+  );
+  db.query(
+    `INSERT INTO products (
+      pesti_code, pesti_kor_name, eng_name, ingredient_name
+    ) VALUES (?, ?, ?, ?)`,
+  ).run(
+    "5000",
+    "아족시스트로빈·프로피코나졸 유현탁제",
+    "Azoxystrobin.Propiconazole SE 18.71(7.01+11.7) %",
+    "Azoxystrobin.Propiconazole",
+  );
+  db.close();
+
+  const { ontologyPath } = exportTtl({ dbPath, outDir });
+  const ingredientObjects = new Parser()
+    .parse(readFileSync(ontologyPath, "utf8"))
+    .filter(
+      (quad) =>
+        quad.subject.value.endsWith("product-5000") &&
+        quad.predicate.value.endsWith("hasIngredient"),
+    )
+    .map((quad) => quad.object.value);
+
+  expect(ingredientObjects).toHaveLength(2);
+  expect(ingredientObjects).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("ingredient-Azoxystrobin"),
+      expect.stringContaining("ingredient-Propiconazole"),
+    ]),
+  );
+});
+
 test("exports fixture-based normalized data and SHACL shapes as valid Turtle", () => {
   const temporaryDirectory = mkdtempSync(join(tmpdir(), "nongyak-kb-ttl-"));
   const dbPath = join(temporaryDirectory, "kb.sqlite");

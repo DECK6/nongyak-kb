@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { basename, dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ingredientName } from "./ingredients";
 
 export interface NormalizeReport {
   counts: Record<string, number>;
@@ -154,17 +155,6 @@ function xmlFiles(rawDir: string, service: string): string[] {
     .filter((entry) => entry.isFile() && extname(entry.name) === ".xml")
     .map((entry) => resolve(serviceDir, entry.name))
     .sort();
-}
-
-function ingredientName(engName: string | null): string | null {
-  if (engName === null) {
-    return null;
-  }
-  return (
-    engName.match(
-      /^(.+?)\s+[A-Z]{1,5}\s*\d+(?:\.\d+)?(?:\s*%)?\s*$/,
-    )?.[1]?.trim() || engName
-  );
 }
 
 // PSIS가 작물명만 주고 cropCd를 비워 보내는 행이 있다(대분류명 "두류"/"서류" 등).

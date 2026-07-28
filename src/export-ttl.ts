@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Writer, DataFactory } from 'n3';
+import { ingredientNames } from "./ingredients";
 
 const ONTOLOGY = "https://deck6ix.github.io/nongyak-kb/ontology#";
 const DATA = "https://deck6ix.github.io/nongyak-kb/data/";
@@ -16,6 +17,7 @@ type ProductRow = {
   pesti_kor_name: string;
   brand_name: string | null;
   comp_name: string | null;
+  eng_name: string | null;
   ingredient_name: string | null;
   indict_symbl: string | null;
   apply_first_reg_date: string | null;
@@ -163,7 +165,9 @@ function createOntology(
   assertDistinctSlugs("Pest", pests.map((pest) => pest.name));
   assertDistinctSlugs(
     "ActiveIngredient",
-    products.flatMap((product) => product.ingredient_name ?? []),
+    products.flatMap((product) =>
+      ingredientNames(product.eng_name, product.ingredient_name),
+    ),
   );
   assertDistinctSlugs(
     "Company",
@@ -209,20 +213,20 @@ function createOntology(
       writer.addQuad(subject, ontologyTerm("companyName"), company);
     }
 
-    if (
-      product.ingredient_name !== null &&
-      product.ingredient_name.trim() !== ""
-    ) {
+    for (const ingredientName of ingredientNames(
+      product.eng_name,
+      product.ingredient_name,
+    )) {
       const ingredient =
-        ingredientSubjects.get(product.ingredient_name) ??
-        dataTerm("ingredient", slug(product.ingredient_name));
-      if (!ingredientSubjects.has(product.ingredient_name)) {
-        ingredientSubjects.set(product.ingredient_name, ingredient);
+        ingredientSubjects.get(ingredientName) ??
+        dataTerm("ingredient", slug(ingredientName));
+      if (!ingredientSubjects.has(ingredientName)) {
+        ingredientSubjects.set(ingredientName, ingredient);
         addType(writer, ingredient, "ActiveIngredient");
         writer.addQuad(
           ingredient,
           rdfsLabel,
-          literal(product.ingredient_name),
+          literal(ingredientName),
         );
       }
       writer.addQuad(subject, ontologyTerm("hasIngredient"), ingredient);
@@ -420,7 +424,7 @@ export function exportTtl(opts?: {
     const products = db
       .query<ProductRow, []>(
         `SELECT
-          pesti_code, pesti_kor_name, brand_name, comp_name, ingredient_name,
+          pesti_code, pesti_kor_name, brand_name, comp_name, eng_name, ingredient_name,
           indict_symbl, apply_first_reg_date, toxic_name, fish_toxic_gubun
         FROM products
         ORDER BY pesti_code`,
