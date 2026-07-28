@@ -200,24 +200,25 @@
     );
 
     try {
+      const distinctResultsSql = `SELECT DISTINCT
+        pesti_kor_name,
+        brand_name,
+        comp_name,
+        crop_name,
+        pest_name,
+        dilut_unit,
+        pesti_use,
+        use_suittime,
+        use_num
+      FROM v_usage
+      ${whereSql}`;
       const countRows = executeQuery(
-        `SELECT COUNT(*) AS total FROM v_usage${whereSql}`,
+        `SELECT COUNT(*) AS total FROM (${distinctResultsSql})`,
         parameters,
       );
       const total = Number(countRows[0]?.total ?? 0);
       const rows = executeQuery(
-        `SELECT
-          pesti_kor_name,
-          brand_name,
-          comp_name,
-          crop_name,
-          pest_name,
-          dilut_unit,
-          pesti_use,
-          use_suittime,
-          use_num
-        FROM v_usage
-        ${whereSql}
+        `${distinctResultsSql}
         ORDER BY
           COALESCE(pesti_kor_name, '') COLLATE NOCASE,
           COALESCE(brand_name, '') COLLATE NOCASE,
